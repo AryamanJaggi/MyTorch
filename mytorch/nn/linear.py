@@ -30,7 +30,7 @@ class Linear:
         """
         dLdA = dLdZ @ self.W
         self.dLdW = dLdZ.T @ self.A
-        self.dLdb = dLdZ.T @ np.ones((self.N, 1))
+        self.dLdb = np.sum(dLdZ, axis=0)
 
         if self.debug:
             self.dLdA = dLdA
