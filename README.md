@@ -14,51 +14,41 @@ Each phase is its own subpackage. Later phases depend on the nn and optim subdir
 
 ```mermaid
 graph TD
-    subgraph "Phase 1 — mytorch/nn"
-        NN["Linear · Activations (ReLU, GELU, Swish, Softmax)<br/>BatchNorm1d · LayerNorm · Embedding<br/>Dropout · MSELoss · CrossEntropyLoss"]
-    end
-    subgraph "Phase 2 — mytorch/cnn"
-        CNN["Conv1d · Conv2d · ConvTranspose1d/2d<br/>MaxPool2d · MeanPool2d<br/>Upsample/Downsample · Flatten"]
-    end
-    subgraph "Phase 3 — mytorch/rnn"
-        RNN["RNNCell · GRUCell"]
-    end
-    subgraph "Phase 4 — mytorch/transformer"
-        TR["ScaledDotProductAttention · MultiHeadAttention<br/>PositionalEncoding · PadMask / CausalMask<br/>Self/Cross-Attention + FeedForward sublayers<br/>Encoder / Decoder layers"]
-    end
-    OPT["mytorch/optim<br/>SGD · Adam"]
+    NN["mytorch/nn - Phase 1<br/>Linear, Activations, BatchNorm,<br/>LayerNorm, Embedding, Dropout, Loss"]
+    CNN["mytorch/cnn - Phase 2<br/>Conv1d, Conv2d, ConvTranspose,<br/>Pooling, Resampling, Flatten"]
+    RNN["mytorch/rnn - Phase 3<br/>RNNCell, GRUCell"]
+    TR["mytorch/transformer - Phase 4<br/>Attention, Positional Encoding,<br/>Encoder and Decoder Layers"]
+    OPT["mytorch/optim<br/>SGD, Adam"]
+    MODELS["models/<br/>worked examples"]
 
     NN --> CNN
     NN --> RNN
     NN --> TR
-    OPT -. updates parameters of .-> NN
-    OPT -. updates parameters of .-> CNN
-    OPT -. updates parameters of .-> RNN
-    OPT -. updates parameters of .-> TR
-
-    MODELS["models/ — worked examples<br/>MLP · CNN · RNN classifier · GRU char predictor · Transformer LM"]
     NN --> MODELS
     CNN --> MODELS
     RNN --> MODELS
     TR --> MODELS
-    OPT --> MODELS
+    OPT -->|updates params of| NN
+    OPT -->|updates params of| CNN
+    OPT -->|updates params of| RNN
+    OPT -->|updates params of| TR
 ```
 
 The most involved piece is the pre-LN Transformer decoder block (`mytorch/transformer/decoder_layers.py`), composed entirely from the layers above it:
 
 ```mermaid
 graph TD
-    X["x"] --> LN1["LayerNorm"]
-    LN1 --> MHA["Multi-Head Self-Attention<br/>(causally masked)"]
+    X["x - input"] --> LN1["LayerNorm"]
+    LN1 --> MHA["Multi-Head Self-Attention<br/>causally masked"]
     MHA --> D1["Dropout"]
-    D1 --> ADD1(("+"))
+    D1 --> ADD1["Add"]
     X --> ADD1
     ADD1 --> LN2["LayerNorm"]
-    LN2 --> F1["Linear: d_model → d_ff"]
+    LN2 --> F1["Linear: d_model to d_ff"]
     F1 --> GELU["GELU"]
-    GELU --> F2["Linear: d_ff → d_model"]
+    GELU --> F2["Linear: d_ff to d_model"]
     F2 --> D2["Dropout"]
-    D2 --> ADD2(("+"))
+    D2 --> ADD2["Add"]
     ADD1 --> ADD2
     ADD2 --> OUT["output"]
 ```
