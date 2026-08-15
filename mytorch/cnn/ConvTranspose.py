@@ -1,7 +1,7 @@
 import numpy as np
-from resampling import *
-from Conv1d import *
-from Conv2d import *
+from .resampling import *
+from .Conv1d import *
+from .Conv2d import *
 
 
 class ConvTranspose1d():

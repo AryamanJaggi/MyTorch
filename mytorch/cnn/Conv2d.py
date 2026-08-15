@@ -1,5 +1,5 @@
 import numpy as np
-from resampling import *
+from .resampling import *
 
 
 class Conv2d_stride1():

@@ -1,5 +1,5 @@
 import numpy as np
-from resampling import *
+from .resampling import *
 
 
 class MaxPool2d_stride1():
