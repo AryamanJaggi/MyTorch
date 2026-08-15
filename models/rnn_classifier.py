@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 
-from mytorch.nn.rnn_cell import *
+from mytorch.rnn.rnn_cell import *
 from mytorch.nn.linear import *
 
 

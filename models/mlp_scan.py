@@ -1,5 +1,5 @@
-from mytorch.nn.flatten import *
-from mytorch.nn.Conv1d import *
+from mytorch.cnn.flatten import *
+from mytorch.cnn.Conv1d import *
 from mytorch.nn.linear import *
 from mytorch.nn.activation import *
 from mytorch.nn.loss import *
