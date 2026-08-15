@@ -1,8 +1,6 @@
 import numpy as np
-import scipy
+import scipy.special
 
-
-### No need to modify Identity class
 class Identity:
     """
     Identity activation function.
@@ -120,46 +118,78 @@ class Swish:
 
         return dLdZ
 
-
 class Softmax:
     """
-    Softmax activation function.
+    A generic Softmax activation function that can be used for any dimension.
     """
+    def __init__(self, dim=-1):
+        """
+        :param dim: Dimension along which to compute softmax (default: -1, last dimension)
+        """
+        self.dim = dim
 
     def forward(self, Z):
         """
-        Remember that Softmax does not act element-wise.
-        It will use an entire row of Z to compute an output element.
+        :param Z: Data Z (*) to apply activation function to input Z.
+        :return: Output returns the computed output A (*).
         """
-        row_maxes = np.max(Z, axis=1, keepdims=True)
-        normalized = np.exp(Z - row_maxes)
-        combined = (np.ones((1, Z.shape[1])) @ normalized.T).T  # create 1xCin matrix of ones, multiply by exponentiated Z to get combined values for each row
-        # combined is now Nx1 where each entry is the sum of the exponentiated values for that row
-        self.A = normalized / combined
+        if self.dim > len(Z.shape) or self.dim < -len(Z.shape):
+            raise ValueError("Dimension to apply softmax to is greater than the number of dimensions in Z")
+        
+        # 1. Shift Z for numerical stability
+        # Keepdims=True ensures it broadcasts correctly during subtraction
+        Z_shifted = Z - np.max(Z, axis=self.dim, keepdims=True)
+    
+        exponented = np.exp(Z_shifted)
+        summed = np.sum(exponented, axis=self.dim, keepdims = True)
+
+        self.A = exponented/summed
         return self.A
 
     def backward(self, dLdA):
-        # Calculate the batch size and number of features
-        N = self.A.shape[0]
-        C = self.A.shape[1]
+        """
+        :param dLdA: Gradient of loss wrt output
+        :return: Gradient of loss with respect to activation input
+        """
+        #reshape
+        dLdA = np.moveaxis(dLdA, self.dim, -1)
+        self.A = np.moveaxis(self.A, self.dim, -1)
+
+        #save input shape
+        input_shape = self.A.shape
+
+        #flatten
+        dLdA = dLdA.reshape(-1,dLdA.shape[-1])
+        self.A = self.A.reshape(-1,self.A.shape[-1])
+
+        # Calculate the * size and number of features
+        N = self.A.shape[0]  # TODO
+        C = self.A.shape[1]  # TODO
 
         # Initialize the final output dLdZ with all zeros.
-        dLdZ = np.zeros((N, C))
+        dLdZ = np.zeros((N,C))  # TODO
 
         # Fill dLdZ one data point (row) at a time.
         for i in range(N):
             # Initialize the Jacobian with all zeros.
-            J = np.zeros((C, C))
+            J = np.zeros((C,C))  # TODO
 
-            # Fill the Jacobian matrix, please read the writeup for the conditions.
+            # Fill the Jacobian matrix
             for m in range(C):
                 for n in range(C):
-                    if (m == n):
-                        J[m, n] = self.A[i, m] * (1 - self.A[i, m])
+                    if (m == n): 
+                        J[m, n] = self.A[i,m]*(1 - self.A[i,m])
                     else:
-                        J[m, n] = -self.A[i, n] * self.A[i, m]
+                        J[m, n] = -self.A[i,n]*self.A[i,m]
 
-            # Calculate the derivative of the loss with respect to the i-th input.
-            dLdZ[i] = dLdA[i] @ J
+            dLdZ[i] = dLdA[i]@J
+        
+        #unflatten
+        dLdZ = dLdZ.reshape(input_shape)
+        self.A = self.A.reshape(input_shape)
+
+        #swap back
+        dLdZ = np.moveaxis(dLdZ, -1, self.dim)
+        self.A = np.moveaxis(self.A, -1, self.dim)
 
         return dLdZ

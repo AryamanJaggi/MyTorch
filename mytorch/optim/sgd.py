@@ -2,43 +2,69 @@ import numpy as np
 
 
 class SGD:
+    """
+    SGD optimizer, with optional momentum and L2 weight decay.
+
+    Generalized to work across every parameter-naming convention used in
+    this library (matching mytorch.optim.adam.Adam):
+      - Linear-style:   .W / .b       (weight + bias)
+      - Norm-style:      .BW / .Bb     (scale + shift, e.g. LayerNorm, BatchNorm1d)
+      - Embedding-style: .W only       (weight table, no bias)
+    """
 
     def __init__(self, model, lr=0.1, momentum=0, weight_decay=0.0):
-        # Initialize the model layers.
-        # NOTE: model.layers mixes Linear layers with activation layers (e.g. ReLU),
-        # but only Linear layers have W/b attributes. Filter to just those layers
-        # so we don't crash trying to read .W/.b off an activation layer.
-        self.l = [layer for layer in model.layers if hasattr(layer, "W")]
-        self.L = len(self.l)
-
-        # Assign learning rate, momentum, and L2 weight decay coefficient.
         self.lr = lr
         self.mu = momentum
         self.weight_decay = weight_decay
 
-        # Initialize momentum terms (velocity) for weights and biases to zeros.
-        self.v_W = [np.zeros(self.l[i].W.shape, dtype="f") for i in range(self.L)]
-        self.v_b = [np.zeros(self.l[i].b.shape, dtype="f") for i in range(self.L)]
+        # Flattened per-parameter bookkeeping: parallel lists, one entry
+        # per learnable array (not per layer -- a Linear layer contributes
+        # two entries, W and b).
+        self._owner = []      # the layer object that owns this parameter
+        self._param_attr = [] # attribute name of the parameter itself, e.g. "W"
+        self._grad_attr = []  # attribute name of its gradient, e.g. "dLdW"
+        self._decay = []      # whether weight decay applies to this parameter
+
+        for layer in model.layers:
+            if hasattr(layer, "W") and hasattr(layer, "b"):
+                # Linear-style: weight + bias
+                self._register(layer, "W", "dLdW", decay=True)
+                self._register(layer, "b", "dLdb", decay=False)
+            elif hasattr(layer, "BW") and hasattr(layer, "Bb"):
+                # Norm-style: scale + shift. Conventionally not weight-decayed.
+                self._register(layer, "BW", "dLdBW", decay=False)
+                self._register(layer, "Bb", "dLdBb", decay=False)
+            elif hasattr(layer, "W"):
+                # Embedding-style: weight table only, no bias.
+                self._register(layer, "W", "dLdW", decay=True)
+
+        self.L = len(self._owner)
+
+        # Momentum terms (velocity), one per registered parameter.
+        self.v = [np.zeros_like(getattr(o, a)) for o, a in zip(self._owner, self._param_attr)]
+
+    def _register(self, layer, param_attr, grad_attr, decay):
+        self._owner.append(layer)
+        self._param_attr.append(param_attr)
+        self._grad_attr.append(grad_attr)
+        self._decay.append(decay)
 
     def step(self):
-        # Update weights and biases for each layer.
         for i in range(self.L):
-            dLdW = self.l[i].dLdW
+            owner = self._owner[i]
+            p_attr = self._param_attr[i]
+            g_attr = self._grad_attr[i]
 
-            # L2 regularization: add weight_decay * W to the weight gradient.
-            # (Biases are conventionally excluded from weight decay.)
-            if self.weight_decay != 0.0:
-                dLdW = dLdW + self.weight_decay * self.l[i].W
+            P = getattr(owner, p_attr)
+            G = getattr(owner, g_attr)
+
+            if self._decay[i] and self.weight_decay != 0.0:
+                G = G + self.weight_decay * P
 
             if self.mu == 0:
-                # If no momentum, use standard SGD update.
-                self.l[i].W = self.l[i].W - self.lr*dLdW  # Update weights using gradients
-                self.l[i].b = self.l[i].b - self.lr*self.l[i].dLdb  # Update biases using gradients
+                new_P = P - self.lr * G
             else:
-                # If momentum is used, update velocity terms.
-                self.v_W[i] = self.mu*self.v_W[i] + dLdW  # Update weight velocity
-                self.v_b[i] = self.mu*self.v_b[i] + self.l[i].dLdb  # Update bias velocity
+                self.v[i] = self.mu * self.v[i] + G
+                new_P = P - self.lr * self.v[i]
 
-                # Update weights and biases using momentum and learning rate.
-                self.l[i].W = self.l[i].W - self.lr*self.v_W[i]  # Update weights using weight velocity
-                self.l[i].b = self.l[i].b - self.lr*self.v_b[i]  # Update biases using bias velocity
+            setattr(owner, p_attr, new_P)

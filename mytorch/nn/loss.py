@@ -31,37 +31,25 @@ class MSELoss:
 
 class CrossEntropyLoss:
     def forward(self, A, Y):
-        """
-        Calculate the Cross Entropy Loss (XENT)
-        :param A: Output of the model of shape (N, C)
-        :param Y: Ground-truth values of shape (N, C)
-        :Return: CrossEntropyLoss (scalar)
-
-        """
         self.A = A
         self.Y = Y
         self.N = A.shape[0]
         self.C = A.shape[1]
-
         Ones_C = np.ones((self.C, 1), dtype='f')
         Ones_N = np.ones((self.N, 1), dtype='f')
 
-        # Numerically stable softmax
+        #numerically stable softmax
         row_maxes = np.max(A, axis=1, keepdims=True)
         exp_A = np.exp(A - row_maxes)
         self.softmax = exp_A / (exp_A @ Ones_C)
-
-        crossentropy = (-Y * np.log(self.softmax)) @ Ones_C
+        crossentropy = (-Y * np.log(self.softmax + 1e-12)) @ Ones_C
         sum_crossentropy_loss = (Ones_N.T @ crossentropy).item()
         mean_crossentropy_loss = sum_crossentropy_loss / self.N
-
         return mean_crossentropy_loss
-
+ 
     def backward(self):
-        """
-        Calculate the gradient of Cross-Entropy Loss wrt model output A.
-        :Return: Gradient of loss L wrt model output A.
-        
-        """
-        dLdA = self.softmax - self.Y
+        # forward() reports the MEAN loss (divided by self.N), so backward()
+        # must return the gradient of that same mean -- i.e. also divided by
+        # self.N -- to be consistent with what forward() reported.
+        dLdA = (self.softmax - self.Y) / self.N
         return dLdA
